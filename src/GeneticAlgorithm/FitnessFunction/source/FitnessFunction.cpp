@@ -14,19 +14,24 @@ int FitnessFunction::calculate (const Chromosome& chrom) const noexcept {
     auto order = chrom.decodeToOrder();
     auto dims = problem.getDimensions();
     int N = problem.getDimensionsCount();
+    
     long long totalCost = 0;
     std::list<int> indices;
-    for (int i = 0; i <= N; i++) {
+    for (int i = 1; i < N; i++) {
         indices.push_back(i);
     }
     for (int o: order) {
-        auto it = indices.begin();
-        std::advance(it, o);
-        int pos = *it;
-        int a = dims[pos-1];
-        int b = dims[pos];
-        int c = dims[pos+1];
+        int matrixNum = o + 1;
+        auto it = std::find(indices.begin(), indices.end(), matrixNum);
+        if (it == indices.end()) continue;
+        int leftIdx = *it;
+        it++;
+        int rightIdx = *it;
+        int a = dims[leftIdx - 1];
+        int b = dims[rightIdx - 1];
+        int c = dims[rightIdx];
         totalCost += operationCost(a, b, c);
+        it--;
         indices.erase(it);
     }
     return totalCost;

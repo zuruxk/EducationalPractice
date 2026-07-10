@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <algorithm>
 
 #include "Chromosome.hpp"
 
@@ -20,8 +21,9 @@ public:
     void removeIndividual (int index);
     
     const Chromosome& getIndividual (int index) const;
-    const std::vector<Chromosome>& getIndividuals () const noexcept;
+    std::vector<Chromosome>& getIndividuals () noexcept;
     int getSize () const noexcept;
+    Chromosome getBestIndividual () const;
 
     bool isEmpty () const noexcept;
     std::string toString () const noexcept;

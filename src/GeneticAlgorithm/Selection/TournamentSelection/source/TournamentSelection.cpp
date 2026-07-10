@@ -6,7 +6,7 @@ TournamentSelection::TournamentSelection (int size) : tournamentSize(size) {
     }
 }
 
-std::vector<Chromosome>& TournamentSelection::select (Population population, int selectionCount) {
+std::vector<Chromosome> TournamentSelection::select (Population population, int selectionCount) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distr(0, population.getSize() - 1);
@@ -18,7 +18,7 @@ std::vector<Chromosome>& TournamentSelection::select (Population population, int
             tournaments.push_back(population.getIndividual(index));
         }
         int minFitness = std::numeric_limits<int>::max();
-        int winnerIdx;
+        int winnerIdx = 0;
         for (int i = 0; i < tournamentSize; i++) {
             int fitness = tournaments[i].getFitness();
             if (fitness < minFitness) {
@@ -31,7 +31,14 @@ std::vector<Chromosome>& TournamentSelection::select (Population population, int
     return selected;
 }
 
-int TournamentSelection::getTournamentSize () const {
+std::string TournamentSelection::getName () const {
+    std::ostringstream ss;
+    ss << "Tournament Selection\n";
+    ss << "Selection size: " << tournamentSize << "\n";
+    return ss.str();
+}
+
+int TournamentSelection::getTournamentSize () const noexcept {
     return tournamentSize;
 }
 

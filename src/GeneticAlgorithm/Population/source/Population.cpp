@@ -1,4 +1,5 @@
 #include "Population.hpp"
+#include <iostream>
 
 Population::Population (const std::vector<Chromosome>& chroms) noexcept : individuals(chroms) {
     size = static_cast<int>(chroms.size());
@@ -26,12 +27,22 @@ const Chromosome& Population::getIndividual (int index) const {
     return individuals[index];
 }
 
-const std::vector<Chromosome>& Population::getIndividuals () const noexcept {
+std::vector<Chromosome>& Population::getIndividuals () noexcept {
     return individuals;
 }
 
 int Population::getSize () const noexcept {
     return size;
+}
+
+Chromosome Population::getBestIndividual () const {
+    if (isEmpty()) {
+        throw std::runtime_error("Population is empty");
+    }
+    auto bestIt = std::min_element(individuals.begin(), individuals.end(), [](const Chromosome& a, const Chromosome& b) {
+        return a.getFitness() < b.getFitness();
+    });
+    return *bestIt;
 }
 
 bool Population::isEmpty () const noexcept {

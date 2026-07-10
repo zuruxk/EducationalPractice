@@ -25,7 +25,8 @@ public:
     void setFitness (int value) noexcept;
 
     bool isFitnessCalculated () const;
-    const std::vector<int>& decodeToOrder () const noexcept;
+    void resetFitness () noexcept;
+    const std::vector<int> decodeToOrder () const noexcept;
     std::string toOrderString () const noexcept;
     std::string toString () const noexcept;
 };

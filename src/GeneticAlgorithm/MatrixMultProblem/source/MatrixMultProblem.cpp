@@ -39,7 +39,7 @@ std::string MatrixMultProblem::toString () const noexcept {
     ss << "Matrix multiplication problem\n";
     ss << "Dimensions:\n";
     for (size_t i = 0; i < dimensionsCount - 1; i++) {
-        ss << "[" << dimensions[i] << "," << dimensions[i+1] << "\n"; 
+        ss << "[" << dimensions[i] << "," << dimensions[i+1] << "]" << "\n"; 
     }
     return ss.str();
 }

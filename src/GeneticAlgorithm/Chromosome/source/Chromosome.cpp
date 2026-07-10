@@ -57,10 +57,14 @@ void Chromosome::setFitness (int value) noexcept {
 }
 
 bool Chromosome::isFitnessCalculated () const {
-    return fitness == -1;
+    return fitness != -1;
 }
 
-const std::vector<int>& Chromosome::decodeToOrder () const noexcept {
+void Chromosome::resetFitness () {
+    fitness = -1;
+}
+
+const std::vector<int> Chromosome::decodeToOrder () const noexcept {
     std::vector<std::pair<int, int>> priorityPosition;
     for (size_t i = 0; i < genes.size(); i++) {
         priorityPosition.emplace_back(genes[i], static_cast<int>(i));
