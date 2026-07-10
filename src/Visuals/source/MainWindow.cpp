@@ -3,8 +3,6 @@
 #include <random>
 #include <numeric>
 
-// ======================== AlgorithmWorker ========================
-
 void AlgorithmWorker::runFull() {
     running = true;
     if (!ga) return;
@@ -70,12 +68,10 @@ void MainWindow::setupUI() {
     setCentralWidget(central);
     QHBoxLayout* mainLayout = new QHBoxLayout(central);
 
-    // ===== Левая панель =====
     QWidget* leftPanel = new QWidget;
     leftPanel->setFixedWidth(400);
     QVBoxLayout* leftLayout = new QVBoxLayout(leftPanel);
 
-    // ---- Ввод данных ----
     QGroupBox* dataGroup = new QGroupBox("Data");
     QVBoxLayout* dataLayout = new QVBoxLayout(dataGroup);
 
@@ -94,7 +90,6 @@ void MainWindow::setupUI() {
 
     leftLayout->addWidget(dataGroup);
 
-    // ---- Параметры алгоритма ----
     QGroupBox* paramGroup = new QGroupBox("Parameters");
     QGridLayout* paramLayout = new QGridLayout(paramGroup);
 
@@ -153,7 +148,6 @@ void MainWindow::setupUI() {
 
     leftLayout->addWidget(paramGroup);
 
-    // ---- Управление ----
     QGroupBox* controlGroup = new QGroupBox("Control");
     QVBoxLayout* controlLayout = new QVBoxLayout(controlGroup);
 
@@ -178,7 +172,6 @@ void MainWindow::setupUI() {
 
     leftLayout->addWidget(controlGroup);
 
-    // ---- Информация ----
     QGroupBox* infoGroup = new QGroupBox("Info");
     QVBoxLayout* infoLayout = new QVBoxLayout(infoGroup);
     genLabel = new QLabel("Generation: 0");
@@ -194,11 +187,9 @@ void MainWindow::setupUI() {
     leftLayout->addStretch();
     mainLayout->addWidget(leftPanel);
 
-    // ===== Правая панель =====
     QWidget* rightPanel = new QWidget;
     QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
 
-    // ---- График ----
     chart = new QChart;
     chart->setTitle("Convergence");
     chart->legend()->setVisible(true);
@@ -231,7 +222,6 @@ void MainWindow::setupUI() {
     chartView->setRenderHint(QPainter::Antialiasing);
     rightLayout->addWidget(chartView);
 
-    // ---- Таблица ----
     table = new QTableWidget;
     table->setColumnCount(3);
     table->setHorizontalHeaderLabels({"#", "Genes", "Fitness"});
@@ -242,7 +232,6 @@ void MainWindow::setupUI() {
 
     mainLayout->addWidget(rightPanel);
 
-    // ---- Связи ----
     connect(loadBtn, &QPushButton::clicked, this, &MainWindow::loadFromFile);
     connect(generateBtn, &QPushButton::clicked, this, &MainWindow::generateRandom);
     connect(startBtn, &QPushButton::clicked, this, &MainWindow::startAlgorithm);
@@ -354,12 +343,10 @@ void MainWindow::generateRandom() {
     currentProblem = MatrixMultProblem(dims);
     hasProblem = true;
 
-    // Пересоздаем GA с новой задачей
     delete ga;
     FitnessFunction fitness(currentProblem);
     ga = new GeneticAlgorithm(fitness);
-    
-    // Устанавливаем параметры из GUI
+
     AlgorithmParams params;
     params.populationSize = popSizeSpin->value();
     params.maxGenerations = maxGenSpin->value();
@@ -367,11 +354,9 @@ void MainWindow::generateRandom() {
     params.mutationProbability = mutProbSpin->value();
     params.elitismSize = elitismSpin->value();
     ga->setParams(params);
-    
-    // Применяем выбранные операторы
+
     applySelectedOperators();
-    
-    // Инициализируем популяцию
+
     ga->initializePopulation();
 
     history.clear();
@@ -384,10 +369,7 @@ void MainWindow::generateRandom() {
     avgSeries->setName("Average");
     chart->addSeries(bestSeries);
     chart->addSeries(avgSeries);
-    
-    // Обновляем отображение с новыми данными
-    // updateInfo(0, ga->getBestSolution().getFitness(), 0);
-    // updateTable(ga->getCurrentPopulation().getIndividuals());
+
     table->setRowCount(0);
     updateInfo(0, -1, -1);
     orderLabel->setText("Order: -");

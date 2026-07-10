@@ -38,9 +38,6 @@
 #include "ConversionMutation.hpp"
 #include "ShufflingMutation.hpp"
 
-// ============================================================
-// 1. AlgorithmWorker
-// ============================================================
 class AlgorithmWorker : public QObject {
     Q_OBJECT
 public:
@@ -61,17 +58,12 @@ signals:
     void finished();
 };
 
-// ============================================================
-// 2. MainWindow
-// ============================================================
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 private:
-    // Ввод данных
     QLineEdit* dimsEdit;
 
-    // Параметры алгоритма
     QSpinBox* popSizeSpin;
     QSpinBox* maxGenSpin;
     QDoubleSpinBox* crossProbSpin;
@@ -79,12 +71,10 @@ private:
     QSpinBox* tourSizeSpin;
     QSpinBox* elitismSpin;
 
-    // Выбор операторов
     QComboBox* selectionCombo;
     QComboBox* crossoverCombo;
     QComboBox* mutationCombo;
 
-    // Кнопки управления
     QPushButton* loadBtn;
     QPushButton* generateBtn;
     QPushButton* startBtn;
@@ -93,7 +83,6 @@ private:
     QPushButton* backBtn;
     QSlider* speedSlider;
 
-    // Отображение
     QChartView* chartView;
     QChart* chart;
     QLineSeries* bestSeries;
@@ -104,13 +93,11 @@ private:
     QLabel* avgLabel;
     QLabel* orderLabel;
 
-    // Алгоритм
     GeneticAlgorithm* ga;
     AlgorithmWorker* worker;
     QThread* workerThread;
     QTimer* timer;
 
-    // История для шагов назад
     struct Snapshot {
         int generation;
         std::vector<Chromosome> population;
