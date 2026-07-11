@@ -12,11 +12,8 @@ void AlgorithmWorker::runFull() {
 
         auto& pop = ga->getCurrentPopulation().getIndividuals();
         int best = ga->getBestSolution().getFitness();
-        double avg = 0;
-        for (auto& c : pop) avg += c.getFitness();
-        avg /= pop.size();
 
-        emit stateUpdated(ga->getGenNumber(), best, avg, pop, ga->getBestFitnessHistory());
+        emit stateUpdated(ga->getGenNumber(), best, pop, ga->getBestFitnessHistory());
         QThread::msleep(50);
     }
     emit finished();
@@ -31,11 +28,8 @@ void AlgorithmWorker::runStep() {
 
     auto pop = ga->getCurrentPopulation().getIndividuals();
     int best = ga->getBestSolution().getFitness();
-    double avg = 0;
-    for (auto& c : pop) avg += c.getFitness();
-    avg /= pop.size();
 
-    emit stateUpdated(ga->getGenNumber(), best, avg, pop, ga->getBestFitnessHistory());
+    emit stateUpdated(ga->getGenNumber(), best, pop, ga->getBestFitnessHistory());
     if (ga->isFinished()) emit finished();
 }
 
@@ -43,7 +37,7 @@ void AlgorithmWorker::stop() {
     running = false;
 }
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ga(nullptr), worker(nullptr), workerThread(nullptr) {
     setupUI();
     createAlgorithm();
 
@@ -53,11 +47,25 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 }
 
 MainWindow::~MainWindow() {
+    if (timer) {
+        timer->stop();
+    }
+    
+    if (worker) {
+        worker->stop();
+        worker->deleteLater();
+        worker = nullptr;
+    }
+    
     if (workerThread) {
         workerThread->quit();
         workerThread->wait();
+        delete workerThread;
+        workerThread = nullptr;
     }
+    
     delete ga;
+    ga = nullptr;
 }
 
 void MainWindow::setupUI() {
@@ -176,12 +184,17 @@ void MainWindow::setupUI() {
     QVBoxLayout* infoLayout = new QVBoxLayout(infoGroup);
     genLabel = new QLabel("Generation: 0");
     bestLabel = new QLabel("Best: -");
-    avgLabel = new QLabel("Average: -");
-    orderLabel = new QLabel("Order: -");
+    orderLabel = new QLabel("Order:");
+
+    orderEdit = new QLineEdit;
+    orderEdit->setReadOnly(true);
+    orderEdit->setStyleSheet("QLineEdit { background-color: #f0f0f0; color: #333; }");
+    orderEdit->setPlaceholderText("Order will appear here after algorithm starts");
+
     infoLayout->addWidget(genLabel);
     infoLayout->addWidget(bestLabel);
-    infoLayout->addWidget(avgLabel);
     infoLayout->addWidget(orderLabel);
+    infoLayout->addWidget(orderEdit);
     leftLayout->addWidget(infoGroup);
 
     leftLayout->addStretch();
@@ -197,26 +210,20 @@ void MainWindow::setupUI() {
     bestSeries = new QLineSeries;
     bestSeries->setName("Best");
     bestSeries->setColor(Qt::green);
-    avgSeries = new QLineSeries;
-    avgSeries->setName("Average");
-    avgSeries->setColor(Qt::blue);
 
     chart->addSeries(bestSeries);
-    chart->addSeries(avgSeries);
 
-    QValueAxis* axisX = new QValueAxis;
+    axisX = new QValueAxis;
     axisX->setTitleText("Generation");
     axisX->setRange(0, 100);
     chart->addAxis(axisX, Qt::AlignBottom);
     bestSeries->attachAxis(axisX);
-    avgSeries->attachAxis(axisX);
 
-    QValueAxis* axisY = new QValueAxis;
+    axisY = new QValueAxis;
     axisY->setTitleText("Fitness");
     axisY->setRange(0, 100000);
     chart->addAxis(axisY, Qt::AlignLeft);
     bestSeries->attachAxis(axisY);
-    avgSeries->attachAxis(axisY);
 
     chartView = new QChartView(chart);
     chartView->setRenderHint(QPainter::Antialiasing);
@@ -238,6 +245,30 @@ void MainWindow::setupUI() {
     connect(stepBtn, &QPushButton::clicked, this, &MainWindow::stepForward);
     connect(finishBtn, &QPushButton::clicked, this, &MainWindow::finishAll);
     connect(backBtn, &QPushButton::clicked, this, &MainWindow::goBack);
+}
+
+void MainWindow::setupChart() {
+    chart->removeAllSeries();
+    
+    bestSeries = new QLineSeries;
+    bestSeries->setName("Best");
+    bestSeries->setColor(Qt::green);
+    chart->addSeries(bestSeries);
+
+    chart->removeAxis(axisX);
+    chart->removeAxis(axisY);
+    
+    axisX = new QValueAxis;
+    axisX->setTitleText("Generation");
+    axisX->setRange(0, 100);
+    chart->addAxis(axisX, Qt::AlignBottom);
+    bestSeries->attachAxis(axisX);
+    
+    axisY = new QValueAxis;
+    axisY->setTitleText("Fitness");
+    axisY->setRange(0, 100000);
+    chart->addAxis(axisY, Qt::AlignLeft);
+    bestSeries->attachAxis(axisY);
 }
 
 void MainWindow::createAlgorithm() {
@@ -285,6 +316,18 @@ void MainWindow::applySelectedOperators() {
     }
 }
 
+bool MainWindow::parseDimensions(const QString& text, std::vector<int>& dims) {
+    QStringList parts = text.split(' ', Qt::SkipEmptyParts);
+    dims.clear();
+    for (const QString& part : parts) {
+        bool ok;
+        int val = part.toInt(&ok);
+        if (!ok || val <= 0) return false;
+        dims.push_back(val);
+    }
+    return dims.size() >= 3;
+}
+
 void MainWindow::loadFromFile() {
     QString path = QFileDialog::getOpenFileName(this, "Open Problem", "", "*.txt");
     if (path.isEmpty()) return;
@@ -298,9 +341,40 @@ void MainWindow::loadFromFile() {
     QTextStream stream(&file);
     int N;
     stream >> N;
-    std::vector<int> dims(N + 1);
-    for (int i = 0; i <= N; ++i) stream >> dims[i];
+
+    if (N <= 0) {
+        QMessageBox::warning(this, "Error", "Invalid N in file");
+        return;
+    }
+    
+    std::vector<int> dims;
+    dims.reserve(N + 1);
+
+    for (int i = 0; i < N; i++) {
+        int val;
+        if (!(stream >> val)) {
+            QMessageBox::warning(this, "Error", 
+                QString("Failed to read dimension %1 (expected %2 dimensions)")
+                .arg(i).arg(N));
+            return;
+        }
+        if (val <= 0) {
+            QMessageBox::warning(this, "Error", 
+                QString("Dimension %1 is not positive: %2")
+                .arg(i).arg(val));
+            return;
+        }
+        dims.push_back(val);
+    }
+    
     file.close();
+
+    if (static_cast<int>(dims.size()) != N) {
+        QMessageBox::warning(this, "Error", 
+            QString("Expected %1 dimensions, got %2")
+            .arg(N).arg(dims.size()));
+        return;
+    }
 
     QString text;
     for (int d : dims) text += QString::number(d) + " ";
@@ -313,17 +387,26 @@ void MainWindow::loadFromFile() {
     FitnessFunction fitness(currentProblem);
     ga = new GeneticAlgorithm(fitness);
 
+    AlgorithmParams params;
+    params.populationSize = popSizeSpin->value();
+    params.maxGenerations = maxGenSpin->value();
+    params.crossoverProbability = crossProbSpin->value();
+    params.mutationProbability = mutProbSpin->value();
+    params.elitismSize = elitismSpin->value();
+    ga->setParams(params);
+
+    applySelectedOperators();
+
+    ga->initializePopulation();
+
     history.clear();
     currentStep = -1;
 
-    chart->removeAllSeries();
-    bestSeries = new QLineSeries;
-    bestSeries->setName("Best");
-    avgSeries = new QLineSeries;
-    avgSeries->setName("Average");
-    chart->addSeries(bestSeries);
-    chart->addSeries(avgSeries);
-    updateInfo(0, -1, -1);
+    setupChart();
+    table->setRowCount(0);
+    updateInfo(0, -1);
+    orderEdit->setPlaceholderText("Order will appear here after algorithm starts");
+    orderEdit->clear();
 }
 
 void MainWindow::generateRandom() {
@@ -362,17 +445,13 @@ void MainWindow::generateRandom() {
     history.clear();
     currentStep = -1;
 
-    chart->removeAllSeries();
-    bestSeries = new QLineSeries;
-    bestSeries->setName("Best");
-    avgSeries = new QLineSeries;
-    avgSeries->setName("Average");
-    chart->addSeries(bestSeries);
-    chart->addSeries(avgSeries);
+    setupChart();
 
     table->setRowCount(0);
-    updateInfo(0, -1, -1);
-    orderLabel->setText("Order: -");
+    updateInfo(0, -1);
+    orderLabel->setText("Order:");
+    orderEdit->setPlaceholderText("Order will appear here after algorithm starts");
+    orderEdit->clear();
 }
 
 void MainWindow::startAlgorithm() {
@@ -380,6 +459,15 @@ void MainWindow::startAlgorithm() {
         QMessageBox::warning(this, "Error", "No problem loaded");
         return;
     }
+
+    std::vector<int> dims;
+    if (!parseDimensions(dimsEdit->text(), dims)) {
+        QMessageBox::warning(this, "Error", "Invalid dimensions format");
+        return;
+    }
+
+    currentProblem = MatrixMultProblem(dims);
+    hasProblem = true;
 
     if (isRunning) {
         isRunning = false;
@@ -409,7 +497,8 @@ void MainWindow::startAlgorithm() {
         currentStep = -1;
         saveSnapshot();
         updateTable(ga->getCurrentPopulation().getIndividuals());
-        updateInfo(0, ga->getBestSolution().getFitness(), 0);
+        updateInfo(0, ga->getBestSolution().getFitness());
+        updateOrder(ga->getBestSolution());
 
         isRunning = true;
         startBtn->setText("Stop");
@@ -436,12 +525,40 @@ void MainWindow::stopAlgorithm() {
 }
 
 void MainWindow::stepForward() {
-    if (!hasProblem || !ga) return;
-    if (ga->isFinished()) return;
-    if (ga->getGenNumber() == 0) {
-        ga->initializePopulation();
-        saveSnapshot();
+    std::vector<int> dims;
+    if (!parseDimensions(dimsEdit->text(), dims)) {
+        QMessageBox::warning(this, "Error", "Invalid dimensions format");
+        return;
     }
+
+    currentProblem = MatrixMultProblem(dims);
+    hasProblem = true;
+    
+    if (!ga || ga->getGenNumber() == 0) {
+        delete ga;
+        FitnessFunction fitness(currentProblem);
+        ga = new GeneticAlgorithm(fitness);
+        
+        AlgorithmParams params;
+        params.populationSize = popSizeSpin->value();
+        params.maxGenerations = maxGenSpin->value();
+        params.crossoverProbability = crossProbSpin->value();
+        params.mutationProbability = mutProbSpin->value();
+        params.elitismSize = elitismSpin->value();
+        ga->setParams(params);
+        
+        applySelectedOperators();
+
+        ga->initializePopulation();
+        history.clear();
+        currentStep = -1;
+        saveSnapshot();
+        updateTable(ga->getCurrentPopulation().getIndividuals());
+        updateInfo(0, ga->getBestSolution().getFitness());
+        updateOrder(ga->getBestSolution());
+    }
+    
+    if (ga->isFinished()) return;
 
     ga->evolveGeneration();
     saveSnapshot();
@@ -449,7 +566,8 @@ void MainWindow::stepForward() {
     auto pop = ga->getCurrentPopulation().getIndividuals();
     updateTable(pop);
     updateChart(ga->getBestFitnessHistory());
-    updateInfo(ga->getGenNumber(), ga->getBestSolution().getFitness(), 0);
+    updateInfo(ga->getGenNumber(), ga->getBestSolution().getFitness());
+    updateOrder(ga->getBestSolution());
 
     if (ga->isFinished()) {
         isRunning = false;
@@ -472,7 +590,8 @@ void MainWindow::finishAll() {
 
     updateTable(ga->getCurrentPopulation().getIndividuals());
     updateChart(ga->getBestFitnessHistory());
-    updateInfo(ga->getGenNumber(), ga->getBestSolution().getFitness(), 0);
+    updateInfo(ga->getGenNumber(), ga->getBestSolution().getFitness());
+    updateOrder(ga->getBestSolution());
     isRunning = false;
     startBtn->setText("Start");
     timer->stop();
@@ -503,7 +622,7 @@ void MainWindow::restoreSnapshot(int index) {
     const auto& snap = history[index];
     updateTable(snap.population);
     updateChart(snap.history);
-    updateInfo(snap.generation, snap.best.getFitness(), 0);
+    updateInfo(snap.generation, snap.best.getFitness());
     updateOrder(snap.best);
 }
 
@@ -522,35 +641,42 @@ void MainWindow::updateTable(const std::vector<Chromosome>& pop) {
 
 void MainWindow::updateChart(const std::vector<int>& history) {
     bestSeries->clear();
-    avgSeries->clear();
     for (size_t i = 0; i < history.size(); ++i) {
         bestSeries->append(i, history[i]);
     }
     if (!history.empty()) {
-        chart->axisX()->setRange(0, static_cast<int>(history.size()) + 10);
-        chart->axisY()->setRange(0, history[0] * 1.5);
+        axisX->setRange(0, static_cast<int>(history.size()) + 10);
+        axisY->setRange(0, history[0] * 1.5);
     }
 }
 
-void MainWindow::updateInfo(int gen, int best, double avg) {
+void MainWindow::updateInfo(int gen, int best) {
     genLabel->setText(QString("Generation: %1").arg(gen));
     bestLabel->setText(QString("Best: %1").arg(best));
-    avgLabel->setText(QString("Average: %1").arg(avg));
+
+    if (ga && !ga->getCurrentPopulation().isEmpty()) {
+        updateOrder(ga->getBestSolution());
+    }
 }
 
 void MainWindow::updateOrder(const Chromosome& chrom) {
     auto order = chrom.decodeToOrder();
-    QString text = "Order: ";
+    QString text = "";
     for (int o : order) text += QString::number(o) + " -> ";
-    orderLabel->setText(text);
+
+    if (text.endsWith(" -> ")) {
+        text.chop(4);
+    }
+
+    orderEdit->setText(text);
 }
 
-void MainWindow::onStateUpdated(int gen, int best, double avg,
+void MainWindow::onStateUpdated(int gen, int best,
                                 const std::vector<Chromosome>& pop,
                                 const std::vector<int>& history) {
     updateTable(pop);
     updateChart(history);
-    updateInfo(gen, best, avg);
+    updateInfo(gen, best);
 }
 
 void MainWindow::onFinished() {

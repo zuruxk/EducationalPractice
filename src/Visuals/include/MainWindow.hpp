@@ -52,7 +52,7 @@ public slots:
     void stop();
 
 signals:
-    void stateUpdated(int generation, int bestFitness, double avgFitness,
+    void stateUpdated(int generation, int bestFitness,
                      const std::vector<Chromosome>& population,
                      const std::vector<int>& history);
     void finished();
@@ -63,6 +63,7 @@ class MainWindow : public QMainWindow {
 
 private:
     QLineEdit* dimsEdit;
+    QLineEdit* orderEdit;
 
     QSpinBox* popSizeSpin;
     QSpinBox* maxGenSpin;
@@ -86,6 +87,8 @@ private:
     QChartView* chartView;
     QChart* chart;
     QLineSeries* bestSeries;
+    QValueAxis* axisX;
+    QValueAxis* axisY;
     QLineSeries* avgSeries;
     QTableWidget* table;
     QLabel* genLabel;
@@ -123,22 +126,24 @@ private slots:
     void stepForward();
     void finishAll();
     void goBack();
-    void onStateUpdated(int gen, int best, double avg,
+    void onStateUpdated(int gen, int best,
                        const std::vector<Chromosome>& pop,
                        const std::vector<int>& history);
     void onFinished();
     void updateTable(const std::vector<Chromosome>& pop);
     void updateChart(const std::vector<int>& history);
-    void updateInfo(int gen, int best, double avg);
+    void updateInfo(int gen, int best);
     void updateOrder(const Chromosome& chrom);
 
 private:
     void setupUI();
+    void setupChart();
     void createAlgorithm();
     void saveSnapshot();
     void restoreSnapshot(int index);
     bool validateInputs();
     void applySelectedOperators();
+    bool parseDimensions(const QString& text, std::vector<int>& dims);
 };
 
 #endif
